@@ -1,0 +1,8 @@
+cli_project_generator.py
+setup.py
+my_cli_tool.egg-info/PKG-INFO
+my_cli_tool.egg-info/SOURCES.txt
+my_cli_tool.egg-info/dependency_links.txt
+my_cli_tool.egg-info/entry_points.txt
+my_cli_tool.egg-info/requires.txt
+my_cli_tool.egg-info/top_level.txt

@@ -1,0 +1,2 @@
+[console_scripts]
+nb = cli_project_generator:main
