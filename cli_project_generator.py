@@ -36,77 +36,77 @@ def generate_project(base_path, project_name):
                     "api": {
                         "routers": {
                             "router.py": 
-                                """
-                                from fastapi import APIRouter
+"""
+from fastapi import APIRouter
 
-                                from app.api.routers import ticket, coin
+from app.api.routers import ticket, coin
 
-                                api_router = APIRouter()
+api_router = APIRouter()
 
-                                api_router.include_router(ticket.hello_world, prefix="/hello", tags=["hello"])
-                                """,
+api_router.include_router(ticket.hello_world, prefix="/hello", tags=["hello"])
+""",
                             "hello_world.py":
-                                """
-                                from fastapi import APIRouter, Depends, HTTPException
-                                from sqlalchemy.orm import Session
-                                from app.api.dependencies import get_db
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.api.dependencies import get_db
 
-                                router = APIRouter()
+router = APIRouter()
 
-                                @router.get("/")
-                                def read_root():
-                                    return {"Hello": "World"}
-                                """
+@router.get("/")
+def read_root():
+    return {"Hello": "World"}
+"""
                             
                         },
                         "dependencies.py": 
                             """
-                                from typing import Generator
-                                from sqlalchemy.orm import Session
-                                from app.db.session import SessionLocal
+from typing import Generator
+from sqlalchemy.orm import Session
+from app.db.session import SessionLocal
 
-                                def get_db() -> Generator[Session, None, None]:
-                                    db = SessionLocal()
-                                    try:
-                                        yield db
-                                    finally:
-                                        db.close()
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
                             """
                     },
                     "core": {
                         "config.py": 
                             """
-                            from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings
 
-                            class Settings(BaseSettings):
-                                APP_NAME: str = "My FastAPI Application"
-                                APP_VERSION: str = "0.1.0"
-                                DEBUG: bool = True
-                                API_V1_STR: str = "/api/v1"
-                                BACKEND_CORS_ORIGINS: list[str] = ["*"]  
-                                DATABASE_URL: str
+class Settings(BaseSettings):
+    APP_NAME: str = "My FastAPI Application"
+    APP_VERSION: str = "0.1.0"
+    DEBUG: bool = True
+    API_V1_STR: str = "/api/v1"
+    BACKEND_CORS_ORIGINS: list[str] = ["*"]  
+    DATABASE_URL: str
 
-                                class Config:
-                                    env_file = ".env"
+    class Config:
+        env_file = ".env"
 
-                            settings = Settings()
+settings = Settings()
                             """,
                         "database.py": 
                             """
-                            from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings
 
-                            class Settings(BaseSettings):
-                                APP_NAME: str = "My FastAPI Application"
-                                APP_VERSION: str = "0.1.0"
-                                DEBUG: bool = True
-                                API_V1_STR: str = "/api/v1"
-                                BACKEND_CORS_ORIGINS: list[str] = ["*"]  
-                                DATABASE_URL: str  
+class Settings(BaseSettings):
+    APP_NAME: str = "My FastAPI Application"
+    APP_VERSION: str = "0.1.0"
+    DEBUG: bool = True
+    API_V1_STR: str = "/api/v1"
+    BACKEND_CORS_ORIGINS: list[str] = ["*"]  
+    DATABASE_URL: str  
 
-                                class Config:
-                                    env_file = ".env"
+    class Config:
+        env_file = ".env"
 
-                            settings = Settings()
+settings = Settings()
                             """
                     },
                     "crud": {},
@@ -120,34 +120,34 @@ def generate_project(base_path, project_name):
                 ".env": "APP_ENV=development\nDATABASE_URL=sqlite:///./test.db",
                 "main.py": 
                     """
-                    import uvicorn
-                    from fastapi import FastAPI
-                    from starlette.middleware.cors import CORSMiddleware
+import uvicorn
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
-                    from app.api.routers.router import api_router
-                    from app.core.config import settings
-                    from app.core.database import Base, engine
+from app.api.routers.router import api_router
+from app.core.config import settings
+from app.core.database import Base, engine
 
-                    Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
-                    def get_app() -> FastAPI:
-                        application = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, debug=settings.DEBUG)
+def get_app() -> FastAPI:
+    application = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, debug=settings.DEBUG)
 
-                        if settings.BACKEND_CORS_ORIGINS:
-                            application.add_middleware(
-                                CORSMiddleware,
-                                allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-                                allow_credentials=True,
-                                allow_methods=["*"],
-                                allow_headers=["*"],
-                            )   
-                        application.include_router(api_router, prefix=settings.API_V1_STR)
-                        return application
+    if settings.BACKEND_CORS_ORIGINS:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )   
+    application.include_router(api_router, prefix=settings.API_V1_STR)
+    return application
 
-                    app = get_app()
+app = get_app()
 
-                    if __name__ == "__main__":
-                        uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
                     """,
                 "README.md": "# Backend for the project\n\nThis is a backend built with FastAPI.",
                 "requirements.txt": "fastapi\nsqlalchemy\nuvicorn\ndotenv"
