@@ -4,6 +4,8 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import requests
+import subprocess
 
 Base = declarative_base()
 
@@ -28,7 +30,19 @@ def create_structure(base_path, structure):
         else:  
             create_file(path, value)
 
-def generate_project(base_path, project_name):
+def generate_project(base_path, project_name,db_type = "sqlite"):
+    database_urls = {
+        "sqlite": "sqlite:///./test.db",
+        "postgresql": "postgresql://user:password@localhost/dbname",
+        "mysql": "mysql://user:password@localhost/dbname",
+        "mssql": "mssql+pyodbc://user:password@localhost/dbname",
+        "oracle": "oracle://user:password@localhost/dbname",
+    }
+
+    if db_type not in database_urls:
+        print(f"Error: Unsupported database type '{db_type}'. Use ''sqlite', 'postgresql', 'mysql', 'mssql', or 'oracle'.")
+        return
+
     project_structure = {
         project_name: {
             "backend": {
@@ -77,19 +91,34 @@ def get_db() -> Generator[Session, None, None]:
                         "config.py": 
                             """
 from pydantic_settings import BaseSettings
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import os
 
 class Settings(BaseSettings):
     APP_NAME: str = "My FastAPI Application"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
     API_V1_STR: str = "/api/v1"
-    BACKEND_CORS_ORIGINS: list[str] = ["*"]  
-    DATABASE_URL: str
+    BACKEND_CORS_ORIGINS: list[str] = ["*"]
+    
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
     class Config:
         env_file = ".env"
 
 settings = Settings()
+
+# ตรวจสอบประเภทฐานข้อมูล
+if settings.DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}  # สำหรับ SQLite
+else:
+    connect_args = {}
+
+engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
                             """,
                         "database.py": 
                             """
@@ -112,12 +141,33 @@ settings = Settings()
                     "crud": {},
                     "db": {},
                     "models": {},
-                    "schemas": {},
+                    "schemas": {
+                        "user_schema.py":
+                            """
+from pydantic import BaseModel, EmailStr
+
+class UserSchema(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+
+    class Config:
+        orm_mode = True
+        schema_extra = {
+            "example": {
+                "id": 1,
+                "name": "John Doe",
+                "email": "johndoe@example.com"
+            }
+        }
+}
+                            """
+                    },
                 },
                 "tests": {
                     "test_main.py": "def test_sample():\n    assert 1 + 1 == 2"
                 },
-                ".env": "APP_ENV=development\nDATABASE_URL=sqlite:///./test.db",
+                ".env": f"APP_ENV=development\nDATABASE_URL={database_urls[db_type]}",
                 "main.py": 
                     """
 import uvicorn
@@ -126,38 +176,48 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.routers.router import api_router
 from app.core.config import settings
-from app.core.database import Base, engine
 
-Base.metadata.create_all(bind=engine)
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="API Documentation for the FastAPI project",
+    version=settings.APP_VERSION,
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-def get_app() -> FastAPI:
-    application = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, debug=settings.DEBUG)
+# CORS Middleware
+if settings.BACKEND_CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-    if settings.BACKEND_CORS_ORIGINS:
-        application.add_middleware(
-            CORSMiddleware,
-            allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )   
-    application.include_router(api_router, prefix=settings.API_V1_STR)
-    return application
-
-app = get_app()
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
                     """,
                 "README.md": "# Backend for the project\n\nThis is a backend built with FastAPI.",
-                "requirements.txt": "fastapi\nsqlalchemy\nuvicorn\ndotenv"
-            },
-            "worker": {}
+                "requirements.txt": 
+                """
+fastapi
+sqlalchemy
+uvicorn
+dotenv
+pydantic
+pydantic-settings
+alembic
+"""
+            }
         }
     }
 
     create_structure(base_path, project_structure)
-    print(f"Project structure with code has been created at {base_path}/{project_name}")
+    print(f"✅ Project created with {db_type} database at {base_path}/{project_name}")
 
 def map_sqlalchemy_to_python(sqlalchemy_type):
     mapping = {
@@ -271,11 +331,41 @@ def generate_models_and_schemas(table_name, output_dir, name):
 
     print(f"Model, schema, CRUD, and router for '{name}' generated in {output_dir}")
 
+
+
+def generate_api_docs():
+    """Export OpenAPI JSON"""
+    base_url = "http://127.0.0.1:8000/api/v1/openapi.json"
+    try:
+        response = requests.get(base_url)
+        if response.status_code == 200:
+            with open("openapi.json", "w") as f:
+                f.write(response.text)
+            print("✅ API Documentation exported as openapi.json")
+        else:
+            print("❌ Failed to retrieve API Docs")
+    except requests.exceptions.ConnectionError:
+        print("❌ FastAPI server is not running. Start the server and try again.")
+
+def init_alembic():
+    """Initialize Alembic migration"""
+    if not os.path.exists("alembic.ini"):
+        subprocess.run(["alembic", "init", "migrations"])
+        print("✅ Alembic initialized!")
+    else:
+        print("⚠️ Alembic already initialized.")
+
+def run_migrations():
+    """Run Alembic migrations (generate & upgrade)"""
+    subprocess.run(["alembic", "revision", "--autogenerate", "-m", "Initial migration"])
+    subprocess.run(["alembic", "upgrade", "head"])
+    print("✅ Database migrated successfully!")
+
 def main():
     parser = argparse.ArgumentParser(description="CLI tool for project generation.")
     parser.add_argument("command", type=str, help="Command to execute (e.g., create, gen ms)")
     parser.add_argument("project_name", type=str, nargs="?", help="Name of the project to create.")
-    parser.add_argument("--table", type=str, help="Table name for generating models and schemas.")
+    parser.add_argument("--table", type=str, help="Table name for generating models and schemas and other files.")
     parser.add_argument("--name", type=str, help="Custom filename for models, schemas, CRUD, and router.")
     args = parser.parse_args()
 
@@ -283,7 +373,8 @@ def main():
         if not args.project_name:
             print("Error: Project name is required for 'create' command.")
             return
-        generate_project(os.getenv('ROOT_PATH', os.getcwd()), args.project_name)
+        db_type = args.db if args.db else "sqlite"
+        generate_project(os.getenv('ROOT_PATH', os.getcwd()), args.project_name, db_type)
     elif args.command == "gen ms":
         if not args.table:
             print("Error: Table name is required for 'gen ms' command.")
@@ -291,7 +382,10 @@ def main():
         if not args.name:
             print("Error: Custom filename (--name) is required for 'gen ms' command.")
             return
-        generate_models_and_schemas(args.table, os.path.abspath(args.path), args.name)
+        output_dir = os.getenv('ROOT_PATH', os.getcwd())  # ใช้ ROOT_PATH หรือ current directory
+        generate_models_and_schemas(args.table, output_dir, args.name)
+    elif args.command == "gen docs":
+        generate_api_docs()
     else:
         print("Unsupported command. Use 'create' to create a project or 'gen ms' to generate models and schemas.")
 

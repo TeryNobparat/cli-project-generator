@@ -1,0 +1,9 @@
+README.md
+cli_project_generator.py
+setup.py
+nb_fast_gen.egg-info/PKG-INFO
+nb_fast_gen.egg-info/SOURCES.txt
+nb_fast_gen.egg-info/dependency_links.txt
+nb_fast_gen.egg-info/entry_points.txt
+nb_fast_gen.egg-info/requires.txt
+nb_fast_gen.egg-info/top_level.txt
